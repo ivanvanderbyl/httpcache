@@ -23,7 +23,7 @@ func main() {
 
 	// Setup transport
 	transport := tripware.New(http.DefaultTransport)
-	transport.Use(httpcache.WithCache(myCache, 1*time.Minute))
+	transport.Use(httpcache.WithCache(myCache, httpcache.WithTTL(1*time.Minute)))
 
 	client := &http.Client{Transport: transport}
 	req, _ := http.NewRequest("GET", "http://example.com", nil)

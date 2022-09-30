@@ -17,16 +17,41 @@ Both these use cases are not supported out of the box with `http.Client` in the 
 ## Usage
 
 ```go
- // Create a new cache using Redis Cache
- myCache := cache.New(&cache.Options{
-  Redis: redisClient,
- })
+// Create a new cache using Redis Cache
+myCache := cache.New(&cache.Options{
+Redis: redisClient,
+})
 
- // Setup transport
- transport := tripware.New(http.DefaultTransport)
- transport.Use(httpcache.WithCache(myCache, 1*time.Minute))
+// Setup transport (using tripware)
+transport := tripware.New(http.DefaultTransport)
+transport.Use(httpcache.WithCache(myCache, 1*time.Minute))
+client := &http.Client{Transport: transport}
 
- client := &http.Client{Transport: transport}
+// Alternative setup transport using http.RoundTripper
+transport := httpcache.NewCacheTransport(http.DefaultTransport, myCache, 1*time.Minute)
+client := &http.Client{Transport: transport}
 ```
 
 See [simple GET example](./examples/simple-get/main.go) for a runnable example.
+
+## Configuration
+
+### `Check`
+
+```go
+func(req *http.Request) bool
+```
+
+A function that checks if the current request is cacheable.
+
+**Default**: All GET and HEAD requests that DO NOT specify a `range` header.
+
+### `CacheKeyFn`
+
+```go
+func(req *http.Request) string
+```
+
+Specifies the function to generate cache keys if the current solution doesn't meet your requirements.
+
+**Default:** `httpcache:METHOD:URLENCODED(URL)`

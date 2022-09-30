@@ -44,7 +44,7 @@ func TestCacheTransport(t *testing.T) {
 			StatsEnabled: true,
 		})
 
-		cacheTransport := NewCacheTransport(http.DefaultTransport, mycache, 1*time.Minute)
+		cacheTransport := NewCacheTransport(http.DefaultTransport, mycache, WithTTL(1*time.Minute))
 		client := &http.Client{Transport: cacheTransport}
 		first, second := expectCachedResponse(client, req)
 		require.Equal(t, false, first)
@@ -61,7 +61,7 @@ func TestCacheTransport(t *testing.T) {
 			LocalCache: cache.NewTinyLFU(1000, time.Minute),
 		})
 
-		cacheTransport := NewCacheTransport(http.DefaultTransport, mycache, 10*time.Second)
+		cacheTransport := NewCacheTransport(http.DefaultTransport, mycache, WithTTL(1*time.Minute))
 		client := &http.Client{Transport: cacheTransport}
 		first, second := expectCachedResponse(client, req)
 		require.Equal(t, false, first)
@@ -78,7 +78,7 @@ func TestCacheTransport(t *testing.T) {
 			LocalCache: cache.NewTinyLFU(1000, time.Minute),
 		})
 
-		cacheTransport := NewCacheTransport(http.DefaultTransport, mycache, 0)
+		cacheTransport := NewCacheTransport(http.DefaultTransport, mycache, WithTTL(0))
 		client := &http.Client{Transport: cacheTransport}
 		first, second := expectCachedResponse(client, req)
 		require.Equal(t, false, first)
@@ -90,7 +90,7 @@ func TestCacheTransport(t *testing.T) {
 		req.Header.Add("range", "bytes=0-10")
 		require.NoError(t, err)
 
-		cacheTransport := NewCacheTransport(http.DefaultTransport, mycache, 10*time.Second)
+		cacheTransport := NewCacheTransport(http.DefaultTransport, mycache, WithTTL(1*time.Minute))
 		client := &http.Client{Transport: cacheTransport}
 		first, second := expectCachedResponse(client, req)
 		require.Equal(t, false, first)

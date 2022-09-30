@@ -25,33 +25,66 @@ type (
 		// The RoundTripper interface actually used to make requests
 		// If nil, http.DefaultTransport is used
 		Cache      *cache.Cache
-		Check      func(req *http.Request) bool
-		CacheKeyFn func(req *http.Request) string
-		TTL        time.Duration
+		check      func(req *http.Request) bool
+		cacheKeyFn func(req *http.Request) string
+		defaultTTL time.Duration
 		next       http.RoundTripper
 	}
+
+	Option func(*Transport)
 )
+
+// WithCache returns a new RoundTripper that will cache responses
+func WithTTL(ttl time.Duration) Option {
+	return func(t *Transport) {
+		t.defaultTTL = ttl
+	}
+}
+
+// WithRequestChecker returns a new RoundTripper that will check if a request should be cached
+func WithRequestChecker(check func(req *http.Request) bool) Option {
+	return func(t *Transport) {
+		t.check = check
+	}
+}
+
+// WithCacheKeyFn returns a new RoundTripper that will use a custom function to generate cache keys
+func WithCacheKeyFn(fn func(req *http.Request) string) Option {
+	return func(t *Transport) {
+		t.cacheKeyFn = fn
+	}
+}
 
 var _ http.RoundTripper = &Transport{}
 
-func NewCacheTransport(next http.RoundTripper, c *cache.Cache, ttl time.Duration) *Transport {
-	return &Transport{
+func NewCacheTransport(next http.RoundTripper, c *cache.Cache, options ...Option) *Transport {
+	if next == nil {
+		next = http.DefaultTransport
+	}
+
+	t := &Transport{
 		next:       next,
 		Cache:      c,
-		TTL:        ttl,
-		Check:      DefaultRequestChecker,
-		CacheKeyFn: CacheKey,
+		defaultTTL: time.Second * 30,
+		check:      DefaultRequestChecker,
+		cacheKeyFn: CacheKey,
 	}
+
+	for _, option := range options {
+		option(t)
+	}
+
+	return t
 }
 
 // RoundTrip implements the RoundTripper interface
 func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if !t.Check(req) || t.TTL == 0 {
+	if !t.check(req) || t.defaultTTL == 0 {
 		return t.next.RoundTrip(req)
 	}
 
 	ctx := req.Context()
-	key := t.CacheKeyFn(req)
+	key := t.cacheKeyFn(req)
 
 	if t.Cache.Exists(ctx, key) {
 		var respBytes []byte
@@ -81,7 +114,7 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	item := &cache.Item{
 		Ctx:   ctx,
 		Key:   key,
-		TTL:   t.TTL,
+		TTL:   t.defaultTTL,
 		Value: dumpedResponse,
 	}
 
