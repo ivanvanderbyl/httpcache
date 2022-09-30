@@ -23,18 +23,24 @@ type (
 		// The RoundTripper interface actually used to make requests
 		// If nil, http.DefaultTransport is used
 		Cache *cache.Cache
+		Check func(req *http.Request) bool
+		TTL   time.Duration
 		next  http.RoundTripper
 	}
 )
 
 var _ http.RoundTripper = &Transport{}
 
-func NewCacheTransport(next http.RoundTripper, c *cache.Cache) *Transport {
-	return &Transport{next: next, Cache: c}
+func NewCacheTransport(next http.RoundTripper, c *cache.Cache, ttl time.Duration) *Transport {
+	return &Transport{next: next, Cache: c, TTL: ttl, Check: DefaultRequestChecker}
 }
 
 // RoundTrip implements the RoundTripper interface
 func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if !t.Check(req) || t.TTL == 0 {
+		return t.next.RoundTrip(req)
+	}
+
 	ctx := req.Context()
 	key := cacheKey(req)
 
@@ -68,7 +74,7 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	item := &cache.Item{
 		Ctx:   ctx,
 		Key:   key,
-		TTL:   1 * time.Minute,
+		TTL:   t.TTL,
 		Value: dumpedResponse,
 	}
 
@@ -82,6 +88,10 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 func IsCachedResponse(resp *http.Response) bool {
 	return resp.Header.Get(HTTPCacheHeader) == "HIT"
+}
+
+func DefaultRequestChecker(req *http.Request) bool {
+	return (req.Method == "GET" || req.Method == "HEAD") && req.Header.Get("range") == ""
 }
 
 func cacheKey(req *http.Request) string {
