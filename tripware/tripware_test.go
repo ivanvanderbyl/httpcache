@@ -28,6 +28,8 @@ func TestTripware(t *testing.T) {
 		w.WriteHeader(http.StatusUnauthorized)
 	}))
 
+	defer testServer.Close()
+
 	roundtrip := New(http.DefaultTransport)
 
 	// Middleware 1
