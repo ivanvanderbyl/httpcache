@@ -27,4 +27,7 @@ return &exampleTripper{base: rt}
 
 // Apply the roundtrip transport to your custom http.Client
 client := &http.Client{Transport: roundtrip}
+
+req:= http.NewRequest(...)
+client.Do(req)
 ```

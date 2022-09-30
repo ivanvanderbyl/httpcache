@@ -1,7 +1,6 @@
 package tripware
 
 import (
-	"log"
 	"net/http"
 	"testing"
 
@@ -13,8 +12,9 @@ type exampleTripper struct {
 	base http.RoundTripper
 }
 
+var _ http.RoundTripper = &exampleTripper{}
+
 func (t *exampleTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	log.Println("REQ")
 	return t.base.RoundTrip(req)
 }
 
