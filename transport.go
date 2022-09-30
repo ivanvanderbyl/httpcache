@@ -3,6 +3,10 @@ package httpcache
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
+	"crypto/sha1"
+	"fmt"
+	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -88,7 +92,13 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	if t.Cache.Exists(ctx, key) {
 		var respBytes []byte
+		var err error
 		if err := t.Cache.Get(ctx, key, &respBytes); err != nil {
+			return nil, err
+		}
+
+		respBytes, err = decompressResponseDump(respBytes)
+		if err != nil {
 			return nil, err
 		}
 
@@ -110,6 +120,13 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if err != nil {
 		return resp, err
 	}
+
+	dumpedResponse, err = compressResponseDump(dumpedResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Printf("Compressed payload is %d bytes", len(dumpedResponse))
 
 	item := &cache.Item{
 		Ctx:   ctx,
@@ -135,10 +152,43 @@ func DefaultRequestChecker(req *http.Request) bool {
 }
 
 func CacheKey(req *http.Request) string {
-	return url.PathEscape(cacheKeyPredix + req.Method + ":" + req.URL.String())
+	urlString := req.URL.String()
+	hashedURL := fmt.Sprintf("%x", sha1.Sum([]byte(urlString)))
+	return url.PathEscape(cacheKeyPredix + req.Method + ":" + hashedURL)
 }
 
 func hydrateResponse(req *http.Request, b []byte) (*http.Response, error) {
 	buf := bytes.NewBuffer(b)
 	return http.ReadResponse(bufio.NewReader(buf), req)
+}
+
+func compressResponseDump(dumpedResponse []byte) ([]byte, error) {
+	var buf bytes.Buffer
+
+	w, err := gzip.NewWriterLevel(&buf, gzip.BestCompression)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := w.Write(dumpedResponse); err != nil {
+		return nil, err
+	}
+	if err := w.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func decompressResponseDump(dumpedResponse []byte) ([]byte, error) {
+	r, err := gzip.NewReader(bytes.NewReader(dumpedResponse))
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+
+	var buf bytes.Buffer
+	if _, err := buf.ReadFrom(r); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
