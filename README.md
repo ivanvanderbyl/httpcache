@@ -7,14 +7,11 @@ cache all responses if desired.
 
 Responses are gzipped when stored in redis.
 
-## Why this exists
+## Installation
 
-Two reasons:
-
-1. You need a http client that respects cache headers and doesn't request cached assets multiple times.
-2. You want to cache API responses at a low level so that your application code doesn't abuse the upstream API.
-
-Both these use cases are not supported out of the box with `http.Client` in the Go standard library.
+```shell
+go get ivan.dev/httpcache
+```
 
 ## Usage
 
@@ -59,3 +56,12 @@ func(req *http.Request) string
 Specifies the function to generate cache keys if the current solution doesn't meet your requirements.
 
 **Default:** `httpcache:METHOD:SHA1(url)`
+
+## Why this exists
+
+Two reasons:
+
+1. You need a http client that respects cache headers and doesn't request cached assets multiple times.
+2. You want to cache API responses at a low level so that your application code doesn't abuse the upstream API.
+
+Both these use cases are not supported out of the box with `http.Client` in the Go standard library.
