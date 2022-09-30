@@ -15,6 +15,9 @@ import (
 const cacheKeyPredix = "httpcache:"
 const HTTPCacheHeader = "X-Http-Cache"
 
+const hit = "HIT"
+const miss = "MISS"
+
 type (
 	// Transport is an implementation of http.RoundTripper that will return values from a cache
 	// where possible (avoiding a network request) and will additionally add validators (etag/if-modified-since)
@@ -55,7 +58,7 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 			return nil, err
 		}
 
-		resp.Header.Add(HTTPCacheHeader, "HIT")
+		resp.Header.Add(HTTPCacheHeader, hit)
 		return resp, nil
 	}
 
@@ -82,16 +85,16 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 
-	resp.Header.Add(HTTPCacheHeader, "MISS")
+	resp.Header.Add(HTTPCacheHeader, miss)
 	return resp, nil
 }
 
 func IsCachedResponse(resp *http.Response) bool {
-	return resp.Header.Get(HTTPCacheHeader) == "HIT"
+	return resp.Header.Get(HTTPCacheHeader) == hit
 }
 
 func DefaultRequestChecker(req *http.Request) bool {
-	return (req.Method == "GET" || req.Method == "HEAD") && req.Header.Get("range") == ""
+	return (req.Method == http.MethodGet || req.Method == http.MethodHead) && req.Header.Get("range") == ""
 }
 
 func cacheKey(req *http.Request) string {
