@@ -2,6 +2,7 @@ package tripware
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/motemen/go-loghttp"
@@ -19,6 +20,14 @@ func (t *exampleTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 func TestTripware(t *testing.T) {
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("authorization") == "Bearer 1234567890" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+
 	roundtrip := New(http.DefaultTransport)
 
 	// Middleware 1
@@ -31,11 +40,14 @@ func TestTripware(t *testing.T) {
 		return &exampleTripper{base: rt}
 	})
 
+	// Middleware 3
+	roundtrip.Use(WithHeader(http.Header{"Authorization": []string{"Bearer 1234567890"}}))
+
 	client := &http.Client{Transport: roundtrip}
 
-	require.Equal(t, 2, len(roundtrip.items))
+	require.Equal(t, 3, len(roundtrip.items))
 
-	req, err := http.NewRequest("GET", "http://example.com", nil)
+	req, err := http.NewRequest("GET", testServer.URL, nil)
 	require.NoError(t, err)
 
 	resp, err := client.Do(req)

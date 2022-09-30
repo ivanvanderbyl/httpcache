@@ -20,10 +20,8 @@ roundtrip.Use(func(rt http.RoundTripper) http.RoundTripper {
 return &loghttp.Transport{Transport: rt}
 })
 
-// Middleware 2
-roundtrip.Use(func(rt http.RoundTripper) http.RoundTripper {
-return &exampleTripper{base: rt}
-})
+// Middleware 2 adds the authorization header to each request.
+roundtrip.Use(tripware.WithHeader(http.Header{"Authorization": []string{"Bearer 1234567890"}}))
 
 // Apply the roundtrip transport to your custom http.Client
 client := &http.Client{Transport: roundtrip}
@@ -31,3 +29,5 @@ client := &http.Client{Transport: roundtrip}
 req:= http.NewRequest(...)
 client.Do(req)
 ```
+
+See [`headers.go`](./headers.go) for an example of how to write a Triperware that adds headers to each request.
