@@ -3,7 +3,6 @@ package httpcache
 import (
 	"bufio"
 	"bytes"
-	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -25,17 +24,24 @@ type (
 	Transport struct {
 		// The RoundTripper interface actually used to make requests
 		// If nil, http.DefaultTransport is used
-		Cache *cache.Cache
-		Check func(req *http.Request) bool
-		TTL   time.Duration
-		next  http.RoundTripper
+		Cache      *cache.Cache
+		Check      func(req *http.Request) bool
+		CacheKeyFn func(req *http.Request) string
+		TTL        time.Duration
+		next       http.RoundTripper
 	}
 )
 
 var _ http.RoundTripper = &Transport{}
 
 func NewCacheTransport(next http.RoundTripper, c *cache.Cache, ttl time.Duration) *Transport {
-	return &Transport{next: next, Cache: c, TTL: ttl, Check: DefaultRequestChecker}
+	return &Transport{
+		next:       next,
+		Cache:      c,
+		TTL:        ttl,
+		Check:      DefaultRequestChecker,
+		CacheKeyFn: CacheKey,
+	}
 }
 
 // RoundTrip implements the RoundTripper interface
@@ -45,7 +51,7 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	ctx := req.Context()
-	key := cacheKey(req)
+	key := t.CacheKeyFn(req)
 
 	if t.Cache.Exists(ctx, key) {
 		var respBytes []byte
@@ -72,8 +78,6 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return resp, err
 	}
 
-	log.Println(string(dumpedResponse))
-
 	item := &cache.Item{
 		Ctx:   ctx,
 		Key:   key,
@@ -97,7 +101,7 @@ func DefaultRequestChecker(req *http.Request) bool {
 	return (req.Method == http.MethodGet || req.Method == http.MethodHead) && req.Header.Get("range") == ""
 }
 
-func cacheKey(req *http.Request) string {
+func CacheKey(req *http.Request) string {
 	return url.PathEscape(cacheKeyPredix + req.Method + ":" + req.URL.String())
 }
 

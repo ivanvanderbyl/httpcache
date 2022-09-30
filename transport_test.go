@@ -35,8 +35,8 @@ func TestCacheTransport(t *testing.T) {
 		redisClient, redisMock := redismock.NewClientMock()
 		req, err := http.NewRequestWithContext(ctx, "GET", testServer.URL, nil)
 		require.NoError(t, err)
-		redisMock.Regexp().ExpectSet(cacheKey(req), `.+`, 1*time.Minute).SetVal("OK")
-		redisMock.ExpectGet(cacheKey(req)).SetVal("hello world")
+		redisMock.Regexp().ExpectSet(CacheKey(req), `.+`, 1*time.Minute).SetVal("OK")
+		redisMock.ExpectGet(CacheKey(req)).SetVal("hello world")
 
 		mycache := cache.New(&cache.Options{
 			Redis:        redisClient,
