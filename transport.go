@@ -6,7 +6,6 @@ import (
 	"compress/gzip"
 	"crypto/sha1"
 	"fmt"
-	"log"
 	"net/http"
 	"net/http/httputil"
 	"time"
@@ -135,7 +134,6 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		if err != nil {
 			return nil, err
 		}
-		log.Printf("Compressed payload is %d bytes", len(dumpedResponse))
 	}
 
 	if err := t.Cache.Set(ctx, key, dumpedResponse, t.defaultTTL); err != nil {

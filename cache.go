@@ -19,7 +19,7 @@ type (
 	}
 
 	tinyLFUCache struct {
-		cache *cache.TinyLFU
+		cache cache.LocalCache
 	}
 )
 
@@ -34,8 +34,8 @@ func RedisCache(cache *cache.Cache) Cache {
 
 // MemoryCache is a simple in-memory cache using an LFU cache.
 func MemoryCache(size int, ttl time.Duration) Cache {
-	cache := cache.NewTinyLFU(1000, 0)
-	return &tinyLFUCache{cache: cache}
+	c := cache.NewTinyLFU(size, ttl)
+	return &tinyLFUCache{cache: c}
 }
 
 func (r *redisCache) Set(ctx context.Context, key string, data []byte, ttl time.Duration) error {

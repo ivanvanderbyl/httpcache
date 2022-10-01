@@ -46,7 +46,7 @@ func TestCacheTransport(t *testing.T) {
 
 		// mycache := cache.New(&cache.Options{Redis: redisClient})
 
-		cacheTransport := NewCacheTransport(http.DefaultTransport, MemoryCache(1, time.Second), WithTTL(1*time.Minute))
+		cacheTransport := NewCacheTransport(http.DefaultTransport, MemoryCache(1000, time.Minute))
 		client := &http.Client{Transport: cacheTransport}
 		first, second := expectCachedResponse(client, req)
 		require.Equal(t, false, first)

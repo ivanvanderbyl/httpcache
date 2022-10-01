@@ -1,6 +1,8 @@
-# `ivan.dev/httpcache`
+# `httpcache`
 
-`httpcache` is simple `net/http` client cache for Go that caches responses in your chosen cache backend.
+A simple `net/http` client cache for Go that caches responses in your chosen cache backend.
+
+[![Tests](https://github.com/ivanvanderbyl/httpcache/actions/workflows/ci.yaml/badge.svg)](https://github.com/ivanvanderbyl/httpcache/actions/workflows/ci.yaml)
 
 **Features:**
 
@@ -23,9 +25,7 @@ go get ivan.dev/httpcache
 
 ```go
 // Create a new cache using Redis Cache
-myCache := cache.New(&cache.Options{
-Redis: redisClient,
-})
+myCache := cache.New(&cache.Options{Redis: redisClient})
 
 // Setup transport (using tripware)
 transport := tripware.New(http.DefaultTransport)
@@ -75,7 +75,7 @@ WithCacheKeyFn(func(req *http.Request) string{
 
 ### `WithCompression()`
 
-Enables extra GZIP compression of each response. This usually ins't necessary since with Redis Cache because it has its own S2 based caching if it decides it is needed.
+Enables extra GZIP compression of each response. This usually ins't necessary since with Redis Cache because it has its own S2 based caching if it decides that it is needed.
 
 Use this if the cache implementation doesn't support compression and you need it.
 
