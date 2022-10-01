@@ -13,6 +13,6 @@ func WithCache(c *cache.Cache, opts ...Option) tripware.Tripperware {
 		if next == nil {
 			next = http.DefaultTransport
 		}
-		return NewCacheTransport(next, c, opts...)
+		return NewCacheTransport(next, RedisCache(c), opts...)
 	}
 }

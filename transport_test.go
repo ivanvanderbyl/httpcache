@@ -32,19 +32,21 @@ func TestCacheTransport(t *testing.T) {
 	// })
 
 	t.Run("It caches GET requests", func(t *testing.T) {
-		redisClient, redisMock := redismock.NewClientMock()
+		// redisClient, _ := redismock.NewClientMock()
 		req, err := http.NewRequestWithContext(ctx, "GET", testServer.URL, nil)
 		require.NoError(t, err)
-		redisMock.Regexp().ExpectSet(CacheKey(req), `.+`, 1*time.Minute).SetVal("OK")
-		redisMock.ExpectGet(CacheKey(req)).SetVal("hello world")
 
-		mycache := cache.New(&cache.Options{
-			Redis:        redisClient,
-			LocalCache:   cache.NewTinyLFU(1000, time.Minute),
-			StatsEnabled: true,
-		})
+		// body := bytes.NewReader([]byte("hello world"))
+		// mockResponse := &http.Response{Status: "OK", StatusCode: 200, Body: io.NopCloser(body)}
+		// respDump, err := httputil.DumpResponse(mockResponse, true)
+		// require.NoError(t, err)
 
-		cacheTransport := NewCacheTransport(http.DefaultTransport, mycache, WithTTL(1*time.Minute))
+		// redisMock.ExpectGet(CacheKey(req)).SetVal(string(respDump))
+		// redisMock.Regexp().ExpectSet(CacheKey(req), `httpcache:SET:.+`, 1*time.Minute).SetVal("OK")
+
+		// mycache := cache.New(&cache.Options{Redis: redisClient})
+
+		cacheTransport := NewCacheTransport(http.DefaultTransport, MemoryCache(1, time.Second), WithTTL(1*time.Minute))
 		client := &http.Client{Transport: cacheTransport}
 		first, second := expectCachedResponse(client, req)
 		require.Equal(t, false, first)
@@ -61,7 +63,7 @@ func TestCacheTransport(t *testing.T) {
 			LocalCache: cache.NewTinyLFU(1000, time.Minute),
 		})
 
-		cacheTransport := NewCacheTransport(http.DefaultTransport, mycache, WithTTL(1*time.Minute))
+		cacheTransport := NewCacheTransport(http.DefaultTransport, RedisCache(mycache), WithTTL(1*time.Minute))
 		client := &http.Client{Transport: cacheTransport}
 		first, second := expectCachedResponse(client, req)
 		require.Equal(t, false, first)
@@ -78,7 +80,7 @@ func TestCacheTransport(t *testing.T) {
 			LocalCache: cache.NewTinyLFU(1000, time.Minute),
 		})
 
-		cacheTransport := NewCacheTransport(http.DefaultTransport, mycache, WithTTL(0))
+		cacheTransport := NewCacheTransport(http.DefaultTransport, RedisCache(mycache), WithTTL(0))
 		client := &http.Client{Transport: cacheTransport}
 		first, second := expectCachedResponse(client, req)
 		require.Equal(t, false, first)
@@ -90,11 +92,25 @@ func TestCacheTransport(t *testing.T) {
 		req.Header.Add("range", "bytes=0-10")
 		require.NoError(t, err)
 
-		cacheTransport := NewCacheTransport(http.DefaultTransport, mycache, WithTTL(1*time.Minute))
+		cacheTransport := NewCacheTransport(http.DefaultTransport, RedisCache(mycache), WithTTL(1*time.Minute))
 		client := &http.Client{Transport: cacheTransport}
 		first, second := expectCachedResponse(client, req)
 		require.Equal(t, false, first)
 		require.Equal(t, false, second)
+	})
+
+	t.Run("It can decompress without being configured to do so", func(t *testing.T) {
+		req, err := http.NewRequest("GET", testServer.URL, nil)
+		require.NoError(t, err)
+
+		cacheTransport := NewCacheTransport(http.DefaultTransport,
+			MemoryCache(10, 30*time.Second),
+			WithCompression(),
+		)
+		client := &http.Client{Transport: cacheTransport}
+		first, second := expectCachedResponse(client, req)
+		require.Equal(t, false, first)
+		require.Equal(t, true, second)
 	})
 }
 

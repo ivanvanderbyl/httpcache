@@ -9,7 +9,6 @@ import (
 	"log"
 	"net/http"
 	"net/http/httputil"
-	"net/url"
 	"time"
 
 	"github.com/go-redis/cache/v8"
@@ -28,11 +27,12 @@ type (
 	Transport struct {
 		// The RoundTripper interface actually used to make requests
 		// If nil, http.DefaultTransport is used
-		Cache      *cache.Cache
-		check      func(req *http.Request) bool
-		cacheKeyFn func(req *http.Request) string
-		defaultTTL time.Duration
-		next       http.RoundTripper
+		Cache             Cache
+		check             func(req *http.Request) bool
+		cacheKeyFn        func(req *http.Request) string
+		defaultTTL        time.Duration
+		enableCompression bool
+		next              http.RoundTripper
 	}
 
 	Option func(*Transport)
@@ -59,9 +59,15 @@ func WithCacheKeyFn(fn func(req *http.Request) string) Option {
 	}
 }
 
+func WithCompression() Option {
+	return func(t *Transport) {
+		t.enableCompression = true
+	}
+}
+
 var _ http.RoundTripper = &Transport{}
 
-func NewCacheTransport(next http.RoundTripper, c *cache.Cache, options ...Option) *Transport {
+func NewCacheTransport(next http.RoundTripper, c Cache, options ...Option) *Transport {
 	if next == nil {
 		next = http.DefaultTransport
 	}
@@ -90,13 +96,15 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	ctx := req.Context()
 	key := t.cacheKeyFn(req)
 
-	if t.Cache.Exists(ctx, key) {
-		var respBytes []byte
-		var err error
-		if err := t.Cache.Get(ctx, key, &respBytes); err != nil {
+	respBytes, err := t.Cache.Get(ctx, key)
+	if err != nil {
+		if err != cache.ErrCacheMiss {
 			return nil, err
 		}
+	}
 
+	if len(respBytes) > 0 {
+		// Cache Hit
 		respBytes, err = decompressResponseDump(respBytes)
 		if err != nil {
 			return nil, err
@@ -111,6 +119,7 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return resp, nil
 	}
 
+	// Cache Miss, make fresh request
 	resp, err := t.next.RoundTrip(req)
 	if err != nil {
 		return nil, err
@@ -121,21 +130,15 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return resp, err
 	}
 
-	dumpedResponse, err = compressResponseDump(dumpedResponse)
-	if err != nil {
-		return nil, err
+	if t.enableCompression {
+		dumpedResponse, err = compressResponseDump(dumpedResponse)
+		if err != nil {
+			return nil, err
+		}
+		log.Printf("Compressed payload is %d bytes", len(dumpedResponse))
 	}
 
-	log.Printf("Compressed payload is %d bytes", len(dumpedResponse))
-
-	item := &cache.Item{
-		Ctx:   ctx,
-		Key:   key,
-		TTL:   t.defaultTTL,
-		Value: dumpedResponse,
-	}
-
-	if err := t.Cache.Set(item); err != nil {
+	if err := t.Cache.Set(ctx, key, dumpedResponse, t.defaultTTL); err != nil {
 		return nil, err
 	}
 
@@ -153,8 +156,7 @@ func DefaultRequestChecker(req *http.Request) bool {
 
 func CacheKey(req *http.Request) string {
 	urlString := req.URL.String()
-	hashedURL := fmt.Sprintf("%x", sha1.Sum([]byte(urlString)))
-	return url.PathEscape(cacheKeyPredix + req.Method + ":" + hashedURL)
+	return fmt.Sprintf("%s:%s:%x", cacheKeyPredix, req.Method, sha1.Sum([]byte(urlString)))
 }
 
 func hydrateResponse(req *http.Request, b []byte) (*http.Response, error) {
@@ -164,7 +166,6 @@ func hydrateResponse(req *http.Request, b []byte) (*http.Response, error) {
 
 func compressResponseDump(dumpedResponse []byte) ([]byte, error) {
 	var buf bytes.Buffer
-
 	w, err := gzip.NewWriterLevel(&buf, gzip.BestCompression)
 	if err != nil {
 		return nil, err
@@ -180,6 +181,15 @@ func compressResponseDump(dumpedResponse []byte) ([]byte, error) {
 }
 
 func decompressResponseDump(dumpedResponse []byte) ([]byte, error) {
+	if len(dumpedResponse) == 0 {
+		return dumpedResponse, nil
+	}
+
+	// Detect if the response is compressed using gzip
+	if dumpedResponse[0] != 31 || dumpedResponse[1] != 139 {
+		return dumpedResponse, nil
+	}
+
 	r, err := gzip.NewReader(bytes.NewReader(dumpedResponse))
 	if err != nil {
 		return nil, err

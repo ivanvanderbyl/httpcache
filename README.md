@@ -1,11 +1,17 @@
 # `ivan.dev/httpcache`
 
-`httpcache` is simple HTTP Client cache for Go that uses [go-redis/cache](https://github.com/go-redis/cache) as the storage layer.
+`httpcache` is simple `net/http` client cache for Go that caches responses in your chosen cache backend.
 
-It can respect cache headers to act like a private client ^^TBD^^ (e.g like a browser or API client) or
-cache all responses if desired.
+**Features:**
 
-Responses are gzipped when stored in redis.
+- [x] Configurable cache keys
+- [x] Configurable TTL
+- [x] Configurable caching check to decide if a response should be cached
+- [x] Configurable cache backends
+- [x] Configurable compression
+- [x] Memory only cache backend
+- [x] Redis Cache backend, with support for multi-tiered caching
+- [ ] RFC 7234 support (PRs welcome)
 
 ## Installation
 
@@ -27,7 +33,8 @@ transport.Use(httpcache.WithCache(myCache, 1*time.Minute))
 client := &http.Client{Transport: transport}
 
 // Alternative setup transport using http.RoundTripper
-transport := httpcache.NewCacheTransport(http.DefaultTransport, myCache, 1*time.Minute)
+// You can use other cache implementations with this approach
+transport := httpcache.NewCacheTransport(http.DefaultTransport, httpcache.RedisCache(myCache), 1*time.Minute)
 client := &http.Client{Transport: transport}
 ```
 
@@ -37,25 +44,40 @@ You can inspect a response to see if it was returned from the cache using `httpc
 
 ## Configuration
 
-### `Check`
+### `WithTTL(time.Duration)`
+
+Sets the default TTL (Time-To-Live) for each cached request, if the underlying cache implementation supports per-item TTLs. If you're using the default `RedisCache` implementation, then this value will be used, however, if you're using the `TinyLFU` implementation, the TTL will be configured by `TinyLFU`
+
+### `WithRequestChecker(...)`
 
 ```go
-func(req *http.Request) bool
+WithRequestChecker(func(req *http.Request) bool{
+  return req.Method == http.MethodGet
+})
 ```
 
 A function that checks if the current request is cacheable.
 
 **Default**: All GET and HEAD requests that DO NOT specify a `range` header.
 
-### `CacheKeyFn`
-
-```go
-func(req *http.Request) string
-```
+### `WithCacheKeyFn(...)`
 
 Specifies the function to generate cache keys if the current solution doesn't meet your requirements.
 
-**Default:** `httpcache:METHOD:SHA1(url)`
+Default implementation looks like this and produces keys like `"httpcache:GET:89dce6a446a69d6b9bdc01ac75251e4c322bcdff"`
+
+```go
+WithCacheKeyFn(func(req *http.Request) string{
+  urlString := req.URL.String()
+  return fmt.Sprintf("%s:%s:%x", cacheKeyPredix, req.Method, sha1.Sum([]byte(urlString)))
+})
+```
+
+### `WithCompression()`
+
+Enables extra GZIP compression of each response. This usually ins't necessary since with Redis Cache because it has its own S2 based caching if it decides it is needed.
+
+Use this if the cache implementation doesn't support compression and you need it.
 
 ## Why this exists
 
