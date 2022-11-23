@@ -18,6 +18,11 @@ func TestCacheTransport(t *testing.T) {
 		w.Header().Set("Cache-Control", "max-age=10")
 	}))
 
+	testFailServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte("Too Busy"))
+	}))
+
 	defer testServer.Close()
 	ctx := context.TODO()
 
@@ -111,6 +116,20 @@ func TestCacheTransport(t *testing.T) {
 		first, second := expectCachedResponse(client, req)
 		require.Equal(t, false, first)
 		require.Equal(t, true, second)
+	})
+
+	t.Run("It does not cache failed requests e.g 5xx", func(t *testing.T) {
+		req, err := http.NewRequest("GET", testFailServer.URL, nil)
+		require.NoError(t, err)
+
+		cacheTransport := NewCacheTransport(http.DefaultTransport,
+			MemoryCache(10, 30*time.Second),
+			WithCompression(),
+		)
+		client := &http.Client{Transport: cacheTransport}
+		first, second := expectCachedResponse(client, req)
+		require.Equal(t, false, first)
+		require.Equal(t, false, second)
 	})
 }
 

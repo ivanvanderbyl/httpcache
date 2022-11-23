@@ -136,11 +136,24 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 	}
 
-	if err := t.Cache.Set(ctx, key, dumpedResponse, t.defaultTTL); err != nil {
-		return nil, err
+	// The following status code are cacheable: 200, 203, 204, 206, 300, 301, 404, 405, 410, 414, and 501.
+	// Source: https://developer.mozilla.org/en-US/docs/Glossary/cacheable
+	if resp.StatusCode == 200 || // OK
+		resp.StatusCode == 203 || // Non-Authoritative Information
+		resp.StatusCode == 204 || // No Content
+		resp.StatusCode == 206 || // Partial Content
+		resp.StatusCode == 300 || // Multiple Choices
+		resp.StatusCode == 301 || // Moved Permanently
+		resp.StatusCode == 404 || // Not Found
+		resp.StatusCode == 405 || // Method Not Allowed
+		resp.StatusCode == 410 || // Gone
+		resp.StatusCode == 414 || // Request-URI Too Long
+		resp.StatusCode == 501 { // Not Implemented
+		if err := t.Cache.Set(ctx, key, dumpedResponse, t.defaultTTL); err != nil {
+			return nil, err
+		}
+		resp.Header.Add(HTTPCacheHeader, miss)
 	}
-
-	resp.Header.Add(HTTPCacheHeader, miss)
 	return resp, nil
 }
 
